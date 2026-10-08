@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'training_screen.dart';
 import 'settings_screen.dart';
+import 'trainer_screen.dart';
 import '../data/alg_database.dart';
 import '../l10n/app_localizations.dart';
 
@@ -48,6 +49,25 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             const SizedBox(height: 8),
+
+            _SectionCard(
+              title: 'Trainer',
+              subtitle: t.trainerSubtitle,
+              description: t.trainerDesc,
+              count: AlgDatabase.f2l.length +
+                  AlgDatabase.oll.length +
+                  AlgDatabase.pll.length +
+                  AlgDatabase.rouxCMLL.length +
+                  AlgDatabase.rouxLSE.length,
+              icon: Icons.timer_rounded,
+              color: const Color(0xFF3949AB),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TrainerScreen()),
+              ),
+            ),
+
+            const SizedBox(height: 24),
 
             const _Header(title: 'CFOP'),
             const SizedBox(height: 8),
