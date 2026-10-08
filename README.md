@@ -1,17 +1,35 @@
-# cfop_trainer
+# Cube Trainer
 
-A new Flutter project.
+A Flutter app for learning and training CFOP and Roux algorithms.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- **176 algorithms** across two methods
+  - **CFOP**: F2L (41), OLL (57), PLL (21)
+  - **Roux**: CMLL (42), LSE (15)
+- **3D cube preview** for F2L cases
+- **Top view with arrows** for OLL, PLL, CMLL, and LSE
+- **Search** across all sections
+- **Favorites** to mark algorithms you want to focus on
+- **9 languages**: English, Русский, Українська, 中文, Español, Deutsch, Français, Português, Italiano
+- **Dark mode**
+- **Responsive layout** for phones, tablets, and desktops
 
-A few resources to get you started if this is your first Flutter project:
+## Download
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- **Android**: [app-release.apk](../../releases/latest)
+- **Windows**: [cube-trainer-windows.zip](../../releases/latest)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Screenshots
+
+_Screenshots coming soon._
+
+## How it works
+
+Each algorithm card shows:
+
+- A visual representation of the cube state after the scramble
+- The algorithm itself
+- A copy button for quick access
+
+For F2L, the cube is rendered in 3D. For last-layer algorithms, the top view is displayed with arrows showing how pieces move during the permutation.
