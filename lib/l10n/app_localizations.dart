@@ -1,0 +1,401 @@
+import 'package:flutter/widgets.dart';
+
+class AppLocalizations {
+  final Locale locale;
+  AppLocalizations(this.locale);
+
+  static AppLocalizations of(BuildContext context) {
+    return Localizations.of<AppLocalizations>(context, AppLocalizations) ??
+        AppLocalizations(const Locale('en'));
+  }
+
+  static const delegate = _AppLocalizationsDelegate();
+
+  static const supportedLocales = [
+    Locale('en'),
+    Locale('ru'),
+    Locale('zh'),
+    Locale('es'),
+    Locale('de'),
+    Locale('fr'),
+    Locale('pt'),
+    Locale('uk'),
+    Locale('it'),
+  ];
+
+  static const Map<String, String> languageNames = {
+    'en': 'English',
+    'ru': 'Русский',
+    'zh': '中文',
+    'es': 'Español',
+    'de': 'Deutsch',
+    'fr': 'Français',
+    'pt': 'Português',
+    'uk': 'Українська',
+    'it': 'Italiano',
+  };
+
+  String _t(String key) {
+    final map = _translations[locale.languageCode] ?? _translations['en']!;
+    return map[key] ?? _translations['en']![key] ?? key;
+  }
+
+  String get appTitle => _t('app_title');
+  String get settings => _t('settings');
+  String get darkMode => _t('dark_mode');
+  String get language => _t('language');
+  String get onlyFavorites => _t('only_favorites');
+  String get noAlgorithms => _t('no_algorithms');
+  String get alg => _t('alg');
+  String get scramble => _t('scramble');
+  String get copied => _t('copied');
+  String get threeDPreview => _t('three_d_preview');
+  String get scrambleButton => _t('scramble_button');
+  String get reset => _t('reset');
+  String get applyCustomMoves => _t('apply_custom_moves');
+  String get applyCustomMovesHint => _t('apply_custom_moves_hint');
+  String get apply => _t('apply');
+  String get scrambleLabel => _t('scramble_label');
+  String get appliedLabel => _t('applied_label');
+  String get selectLanguage => _t('select_language');
+  String get onlyFavoritesTooltip => _t('only_favorites_tooltip');
+
+  String get searchHint => _t('search_hint');
+  String get algorithmSingular => _t('algorithm_singular');
+  String get algorithmPlural => _t('algorithm_plural');
+  String get f2lSubtitle => _t('f2l_subtitle');
+  String get f2lDesc => _t('f2l_desc');
+  String get ollSubtitle => _t('oll_subtitle');
+  String get ollDesc => _t('oll_desc');
+  String get pllSubtitle => _t('pll_subtitle');
+  String get pllDesc => _t('pll_desc');
+  String get cmllSubtitle => _t('cmll_subtitle');
+  String get cmllDesc => _t('cmll_desc');
+  String get lseSubtitle => _t('lse_subtitle');
+  String get lseDesc => _t('lse_desc');
+
+  static const Map<String, Map<String, String>> _translations = {
+    'en': {
+      'app_title': 'Cube Trainer',
+      'settings': 'Settings',
+      'dark_mode': 'Dark mode',
+      'language': 'Language',
+      'only_favorites': 'Only favorites',
+      'only_favorites_tooltip': 'Only favorites',
+      'no_algorithms': 'No algorithms here.',
+      'alg': 'Alg',
+      'scramble': 'Scramble',
+      'copied': 'copied',
+      'three_d_preview': '3D Cube Preview',
+      'scramble_button': 'Scramble',
+      'reset': 'Reset',
+      'apply_custom_moves': 'Apply custom moves',
+      'apply_custom_moves_hint': "Example: R U R' U' F' U F",
+      'apply': 'Apply',
+      'scramble_label': 'Scramble:',
+      'applied_label': 'Applied:',
+      'select_language': 'Select language',
+      'search_hint': 'Search…',
+      'algorithm_singular': 'algorithm',
+      'algorithm_plural': 'algorithms',
+      'f2l_subtitle': 'First Two Layers',
+      'f2l_desc': 'Pairs of corner + edge for two bottom layers',
+      'oll_subtitle': 'Orientation of the Last Layer',
+      'oll_desc': 'Orient top stickers to yellow',
+      'pll_subtitle': 'Permutation of the Last Layer',
+      'pll_desc': 'Final permutation to solve the cube',
+      'cmll_subtitle': 'Corners of the Last Layer',
+      'cmll_desc': 'Orient and permute top corners',
+      'lse_subtitle': 'Last Six Edges',
+      'lse_desc': 'Solve last 6 edges (M + U moves)',
+    },
+    'ru': {
+      'app_title': 'Тренажёр кубика',
+      'settings': 'Настройки',
+      'dark_mode': 'Тёмная тема',
+      'language': 'Язык',
+      'only_favorites': 'Только избранное',
+      'only_favorites_tooltip': 'Только избранное',
+      'no_algorithms': 'Здесь нет алгоритмов.',
+      'alg': 'Алг',
+      'scramble': 'Скрамбл',
+      'copied': 'скопировано',
+      'three_d_preview': '3D-превью кубика',
+      'scramble_button': 'Скрамбл',
+      'reset': 'Сброс',
+      'apply_custom_moves': 'Применить свои ходы',
+      'apply_custom_moves_hint': "Пример: R U R' U' F' U F",
+      'apply': 'Применить',
+      'scramble_label': 'Скрамбл:',
+      'applied_label': 'Применено:',
+      'select_language': 'Выбор языка',
+      'search_hint': 'Поиск…',
+      'algorithm_singular': 'алгоритм',
+      'algorithm_plural': 'алгоритмов',
+      'f2l_subtitle': 'Первые два слоя',
+      'f2l_desc': 'Пары угол + ребро для двух нижних слоёв',
+      'oll_subtitle': 'Ориентация последнего слоя',
+      'oll_desc': 'Ориентировать верхние наклейки в жёлтый',
+      'pll_subtitle': 'Перестановка последнего слоя',
+      'pll_desc': 'Финальная перестановка для сборки кубика',
+      'cmll_subtitle': 'Углы последнего слоя',
+      'cmll_desc': 'Ориентировать и переставить верхние углы',
+      'lse_subtitle': 'Последние шесть рёбер',
+      'lse_desc': 'Решить последние 6 рёбер (M + U)',
+    },
+    'uk': {
+      'app_title': 'Тренажер кубика',
+      'settings': 'Налаштування',
+      'dark_mode': 'Темна тема',
+      'language': 'Мова',
+      'only_favorites': 'Лише обране',
+      'only_favorites_tooltip': 'Лише обране',
+      'no_algorithms': 'Тут немає алгоритмів.',
+      'alg': 'Алг',
+      'scramble': 'Скрамбл',
+      'copied': 'скопійовано',
+      'three_d_preview': '3D-перегляд кубика',
+      'scramble_button': 'Скрамбл',
+      'reset': 'Скинути',
+      'apply_custom_moves': 'Застосувати власні ходи',
+      'apply_custom_moves_hint': "Приклад: R U R' U' F' U F",
+      'apply': 'Застосувати',
+      'scramble_label': 'Скрамбл:',
+      'applied_label': 'Застосовано:',
+      'select_language': 'Вибрати мову',
+      'search_hint': 'Пошук…',
+      'algorithm_singular': 'алгоритм',
+      'algorithm_plural': 'алгоритмів',
+      'f2l_subtitle': 'Перші два шари',
+      'f2l_desc': 'Пари кут + ребро для двох нижніх шарів',
+      'oll_subtitle': 'Орієнтація останнього шару',
+      'oll_desc': 'Орієнтувати верхні наклейки в жовтий',
+      'pll_subtitle': 'Перестановка останнього шару',
+      'pll_desc': 'Фінальна перестановка для складання кубика',
+      'cmll_subtitle': 'Кути останнього шару',
+      'cmll_desc': 'Орієнтувати та переставити верхні кути',
+      'lse_subtitle': 'Останні шість ребер',
+      'lse_desc': 'Вирішити останні 6 ребер (M + U)',
+    },
+    'zh': {
+      'app_title': '魔方训练器',
+      'settings': '设置',
+      'dark_mode': '深色模式',
+      'language': '语言',
+      'only_favorites': '仅收藏',
+      'only_favorites_tooltip': '仅收藏',
+      'no_algorithms': '暂无算法。',
+      'alg': '公式',
+      'scramble': '打乱',
+      'copied': '已复制',
+      'three_d_preview': '3D 魔方预览',
+      'scramble_button': '打乱',
+      'reset': '重置',
+      'apply_custom_moves': '应用自定义步骤',
+      'apply_custom_moves_hint': "例如：R U R' U' F' U F",
+      'apply': '应用',
+      'scramble_label': '打乱：',
+      'applied_label': '已应用：',
+      'select_language': '选择语言',
+      'search_hint': '搜索…',
+      'algorithm_singular': '算法',
+      'algorithm_plural': '算法',
+      'f2l_subtitle': '前两层',
+      'f2l_desc': '底部两层的角块+棱块配对',
+      'oll_subtitle': '顶层朝向',
+      'oll_desc': '将所有顶层贴纸翻为黄色',
+      'pll_subtitle': '顶层排列',
+      'pll_desc': '最终排列以完成魔方',
+      'cmll_subtitle': '顶层角块',
+      'cmll_desc': '翻转并排列顶层角块',
+      'lse_subtitle': '最后六棱',
+      'lse_desc': '解决最后6条棱 (M + U)',
+    },
+    'es': {
+      'app_title': 'Entrenador de cubo',
+      'settings': 'Ajustes',
+      'dark_mode': 'Modo oscuro',
+      'language': 'Idioma',
+      'only_favorites': 'Solo favoritos',
+      'only_favorites_tooltip': 'Solo favoritos',
+      'no_algorithms': 'No hay algoritmos aquí.',
+      'alg': 'Alg',
+      'scramble': 'Mezcla',
+      'copied': 'copiado',
+      'three_d_preview': 'Vista 3D del cubo',
+      'scramble_button': 'Mezclar',
+      'reset': 'Reiniciar',
+      'apply_custom_moves': 'Aplicar movimientos personalizados',
+      'apply_custom_moves_hint': "Ejemplo: R U R' U' F' U F",
+      'apply': 'Aplicar',
+      'scramble_label': 'Mezcla:',
+      'applied_label': 'Aplicado:',
+      'select_language': 'Seleccionar idioma',
+      'search_hint': 'Buscar…',
+      'algorithm_singular': 'algoritmo',
+      'algorithm_plural': 'algoritmos',
+      'f2l_subtitle': 'Primeras dos capas',
+      'f2l_desc': 'Pares de esquina + arista para las dos capas inferiores',
+      'oll_subtitle': 'Orientación de la última capa',
+      'oll_desc': 'Orientar las pegatinas superiores a amarillo',
+      'pll_subtitle': 'Permutación de la última capa',
+      'pll_desc': 'Permutación final para resolver el cubo',
+      'cmll_subtitle': 'Esquinas de la última capa',
+      'cmll_desc': 'Orientar y permutar las esquinas superiores',
+      'lse_subtitle': 'Últimas seis aristas',
+      'lse_desc': 'Resolver las últimas 6 aristas (M + U)',
+    },
+    'de': {
+      'app_title': 'Cube-Trainer',
+      'settings': 'Einstellungen',
+      'dark_mode': 'Dunkelmodus',
+      'language': 'Sprache',
+      'only_favorites': 'Nur Favoriten',
+      'only_favorites_tooltip': 'Nur Favoriten',
+      'no_algorithms': 'Keine Algorithmen vorhanden.',
+      'alg': 'Alg',
+      'scramble': 'Scramble',
+      'copied': 'kopiert',
+      'three_d_preview': '3D-Würfelvorschau',
+      'scramble_button': 'Scramble',
+      'reset': 'Zurücksetzen',
+      'apply_custom_moves': 'Eigene Züge anwenden',
+      'apply_custom_moves_hint': "Beispiel: R U R' U' F' U F",
+      'apply': 'Anwenden',
+      'scramble_label': 'Scramble:',
+      'applied_label': 'Angewendet:',
+      'select_language': 'Sprache auswählen',
+      'search_hint': 'Suchen…',
+      'algorithm_singular': 'Algorithmus',
+      'algorithm_plural': 'Algorithmen',
+      'f2l_subtitle': 'Erste zwei Schichten',
+      'f2l_desc': 'Ecke + Kante Paare für die zwei unteren Schichten',
+      'oll_subtitle': 'Ausrichtung der letzten Schicht',
+      'oll_desc': 'Obere Aufkleber auf Gelb ausrichten',
+      'pll_subtitle': 'Permutation der letzten Schicht',
+      'pll_desc': 'Endgültige Permutation zum Lösen des Würfels',
+      'cmll_subtitle': 'Ecken der letzten Schicht',
+      'cmll_desc': 'Obere Ecken ausrichten und permutieren',
+      'lse_subtitle': 'Letzte sechs Kanten',
+      'lse_desc': 'Letzte 6 Kanten lösen (M + U)',
+    },
+    'fr': {
+      'app_title': 'Entraîneur de cube',
+      'settings': 'Paramètres',
+      'dark_mode': 'Mode sombre',
+      'language': 'Langue',
+      'only_favorites': 'Favoris uniquement',
+      'only_favorites_tooltip': 'Favoris uniquement',
+      'no_algorithms': 'Aucun algorithme ici.',
+      'alg': 'Alg',
+      'scramble': 'Mélange',
+      'copied': 'copié',
+      'three_d_preview': 'Aperçu 3D du cube',
+      'scramble_button': 'Mélanger',
+      'reset': 'Réinitialiser',
+      'apply_custom_moves': 'Appliquer des mouvements personnalisés',
+      'apply_custom_moves_hint': "Exemple : R U R' U' F' U F",
+      'apply': 'Appliquer',
+      'scramble_label': 'Mélange :',
+      'applied_label': 'Appliqué :',
+      'select_language': 'Choisir la langue',
+      'search_hint': 'Rechercher…',
+      'algorithm_singular': 'algorithme',
+      'algorithm_plural': 'algorithmes',
+      'f2l_subtitle': 'Deux premières couches',
+      'f2l_desc': 'Paires coin + arête pour les deux couches inférieures',
+      'oll_subtitle': 'Orientation de la dernière couche',
+      'oll_desc': 'Orienter les autocollants du haut en jaune',
+      'pll_subtitle': 'Permutation de la dernière couche',
+      'pll_desc': 'Permutation finale pour résoudre le cube',
+      'cmll_subtitle': 'Coins de la dernière couche',
+      'cmll_desc': 'Orienter et permuter les coins du haut',
+      'lse_subtitle': 'Six dernières arêtes',
+      'lse_desc': 'Résoudre les 6 dernières arêtes (M + U)',
+    },
+    'pt': {
+      'app_title': 'Treinador de cubo',
+      'settings': 'Configurações',
+      'dark_mode': 'Modo escuro',
+      'language': 'Idioma',
+      'only_favorites': 'Apenas favoritos',
+      'only_favorites_tooltip': 'Apenas favoritos',
+      'no_algorithms': 'Nenhum algoritmo aqui.',
+      'alg': 'Alg',
+      'scramble': 'Embaralhar',
+      'copied': 'copiado',
+      'three_d_preview': 'Visualização 3D do cubo',
+      'scramble_button': 'Embaralhar',
+      'reset': 'Redefinir',
+      'apply_custom_moves': 'Aplicar movimentos personalizados',
+      'apply_custom_moves_hint': "Exemplo: R U R' U' F' U F",
+      'apply': 'Aplicar',
+      'scramble_label': 'Embaralhar:',
+      'applied_label': 'Aplicado:',
+      'select_language': 'Selecionar idioma',
+      'search_hint': 'Pesquisar…',
+      'algorithm_singular': 'algoritmo',
+      'algorithm_plural': 'algoritmos',
+      'f2l_subtitle': 'Duas primeiras camadas',
+      'f2l_desc': 'Pares de canto + aresta para as duas camadas inferiores',
+      'oll_subtitle': 'Orientação da última camada',
+      'oll_desc': 'Orientar os adesivos superiores para amarelo',
+      'pll_subtitle': 'Permutação da última camada',
+      'pll_desc': 'Permutação final para resolver o cubo',
+      'cmll_subtitle': 'Cantos da última camada',
+      'cmll_desc': 'Orientar e permutar os cantos superiores',
+      'lse_subtitle': 'Últimas seis arestas',
+      'lse_desc': 'Resolver as últimas 6 arestas (M + U)',
+    },
+    'it': {
+      'app_title': 'Allenatore di cubo',
+      'settings': 'Impostazioni',
+      'dark_mode': 'Modalità scura',
+      'language': 'Lingua',
+      'only_favorites': 'Solo preferiti',
+      'only_favorites_tooltip': 'Solo preferiti',
+      'no_algorithms': 'Nessun algoritmo qui.',
+      'alg': 'Alg',
+      'scramble': 'Mescola',
+      'copied': 'copiato',
+      'three_d_preview': 'Anteprima 3D del cubo',
+      'scramble_button': 'Mescola',
+      'reset': 'Reimposta',
+      'apply_custom_moves': 'Applica mosse personalizzate',
+      'apply_custom_moves_hint': "Esempio: R U R' U' F' U F",
+      'apply': 'Applica',
+      'scramble_label': 'Mescola:',
+      'applied_label': 'Applicato:',
+      'select_language': 'Seleziona lingua',
+      'search_hint': 'Cerca…',
+      'algorithm_singular': 'algoritmo',
+      'algorithm_plural': 'algoritmi',
+      'f2l_subtitle': 'Primi due strati',
+      'f2l_desc': 'Coppie angolo + spigolo per i due strati inferiori',
+      'oll_subtitle': "Orientamento dell'ultimo strato",
+      'oll_desc': 'Orientare gli adesivi superiori al giallo',
+      'pll_subtitle': "Permutazione dell'ultimo strato",
+      'pll_desc': 'Permutazione finale per risolvere il cubo',
+      'cmll_subtitle': "Angoli dell'ultimo strato",
+      'cmll_desc': 'Orientare e permutare gli angoli superiori',
+      'lse_subtitle': 'Ultimi sei spigoli',
+      'lse_desc': 'Risolvere gli ultimi 6 spigoli (M + U)',
+    },
+  };
+}
+
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
+  const _AppLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => AppLocalizations.supportedLocales
+      .any((l) => l.languageCode == locale.languageCode);
+
+  @override
+  Future<AppLocalizations> load(Locale locale) async =>
+      AppLocalizations(locale);
+
+  @override
+  bool shouldReload(_AppLocalizationsDelegate old) => false;
+}
