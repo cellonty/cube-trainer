@@ -27,6 +27,7 @@ A Flutter app for learning and training CFOP and Roux algorithms.
   <img src="screenshots/f2l.jpg" width="260" />
   <img src="screenshots/pll.jpg" width="260" />
   <img src="screenshots/settings.jpg" width="260" />
+  <img src="screenshots/cmll.jpg" width="260" />
 </p>
 
 ## How it works
