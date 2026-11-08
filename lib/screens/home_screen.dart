@@ -1,274 +1,265 @@
 import 'package:flutter/material.dart';
-import 'training_screen.dart';
-import 'settings_screen.dart';
-import 'trainer_screen.dart';
-import '../data/alg_database.dart';
+
+import '../data/alg_data.dart';
 import '../l10n/app_localizations.dart';
+import '../models/alg_models.dart';
+import '../services/app_state.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common.dart';
+import '../widgets/cube_3d.dart';
+import 'case_screen.dart';
+import 'set_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  final bool isDark;
-  final ValueChanged<bool> onThemeChanged;
-  final Locale currentLocale;
-  final ValueChanged<Locale> onLocaleChanged;
+  const HomeScreen({super.key});
 
-  const HomeScreen({
-    Key? key,
-    required this.isDark,
-    required this.onThemeChanged,
-    required this.currentLocale,
-    required this.onLocaleChanged,
-  }) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final t = AppLocalizations.of(context);
+    final favs = [
+      for (final s in kAlgSets)
+        for (final c in s.cases)
+          if (state.isFavorite(c.id)) c,
+    ];
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(child: SafeArea(bottom: false, child: _Hero(state: state))),
+        if (favs.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: SectionHeader(title: '★ ${t.tr('favorites')}', subtitle: '${favs.length}'),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 150,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: favs.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  final c = favs[i];
+                  final set = AlgRepo.setOfCase[c.id]!;
+                  return SizedBox(
+                    width: 120,
+                    child: TintCard(
+                      color: AppTheme.colorForSet(set.id),
+                      padding: const EdgeInsets.all(10),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => CaseScreen(algCase: c)),
+                      ),
+                      child: Column(
+                        children: [
+                          Expanded(child: CasePreview(algCase: c, size: 90, grayscale: state.grayscale)),
+                          const SizedBox(height: 6),
+                          Text(c.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+        for (final m in Method.values) ...[
+          SliverToBoxAdapter(
+            child: SectionHeader(title: methodName(t, m), subtitle: t.tr('method_${m.name}_sub')),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 340,
+                mainAxisExtent: 152,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+              ),
+              delegate: SliverChildListDelegate([
+                for (final s in AlgRepo.byMethod(m)) _SetTile(set: s),
+              ]),
+            ),
+          ),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: 28)),
+      ],
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  final AppState state;
+  const _Hero({required this.state});
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    var learned = 0, learning = 0;
+    for (final s in kAlgSets) {
+      learned += state.countStatus(s, LearnStatus.learned);
+      learning += state.countStatus(s, LearnStatus.learning);
+    }
+    final progress = kTotalCases == 0 ? 0.0 : learned / kTotalCases;
+    const white = Colors.white;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(t.appTitle),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => SettingsScreen(
-                  isDark: isDark,
-                  onThemeChanged: onThemeChanged,
-                  currentLocale: currentLocale,
-                  onLocaleChanged: onLocaleChanged,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.fromLTRB(22, 20, 12, 20),
+      decoration: BoxDecoration(
+        gradient: AppTheme.hero(scheme),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(color: scheme.primary.withValues(alpha: 0.35), blurRadius: 30, offset: const Offset(0, 12)),
         ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const SizedBox(height: 8),
-
-            _SectionCard(
-              title: 'Trainer',
-              subtitle: t.trainerSubtitle,
-              description: t.trainerDesc,
-              count: AlgDatabase.f2l.length +
-                  AlgDatabase.oll.length +
-                  AlgDatabase.pll.length +
-                  AlgDatabase.rouxCMLL.length +
-                  AlgDatabase.rouxLSE.length,
-              icon: Icons.timer_rounded,
-              color: const Color(0xFF3949AB),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const TrainerScreen()),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            const _Header(title: 'CFOP'),
-            const SizedBox(height: 8),
-
-            _SectionCard(
-              title: 'F2L',
-              subtitle: t.f2lSubtitle,
-              description: t.f2lDesc,
-              count: AlgDatabase.f2l.length,
-              icon: Icons.link_rounded,
-              color: const Color(0xFF00B84A),
-              onTap: () => _open(context, 'F2L', AlgDatabase.f2l),
-            ),
-            const SizedBox(height: 12),
-
-            _SectionCard(
-              title: 'OLL',
-              subtitle: t.ollSubtitle,
-              description: t.ollDesc,
-              count: AlgDatabase.oll.length,
-              icon: Icons.grid_on_rounded,
-              color: const Color(0xFFFFB300),
-              onTap: () => _open(context, 'OLL', AlgDatabase.oll),
-            ),
-            const SizedBox(height: 12),
-
-            _SectionCard(
-              title: 'PLL',
-              subtitle: t.pllSubtitle,
-              description: t.pllDesc,
-              count: AlgDatabase.pll.length,
-              icon: Icons.grid_view_rounded,
-              color: const Color(0xFFD50000),
-              onTap: () => _open(context, 'PLL', AlgDatabase.pll),
-            ),
-
-            const SizedBox(height: 24),
-
-            const _Header(title: 'Roux'),
-            const SizedBox(height: 8),
-
-            _SectionCard(
-              title: 'CMLL',
-              subtitle: t.cmllSubtitle,
-              description: t.cmllDesc,
-              count: AlgDatabase.rouxCMLL.length,
-              icon: Icons.grid_on_rounded,
-              color: const Color(0xFF7B1FA2),
-              onTap: () => _open(context, 'CMLL', AlgDatabase.rouxCMLL),
-            ),
-            const SizedBox(height: 12),
-
-            _SectionCard(
-              title: 'LSE',
-              subtitle: t.lseSubtitle,
-              description: t.lseDesc,
-              count: AlgDatabase.rouxLSE.length,
-              icon: Icons.swap_horiz_rounded,
-              color: const Color(0xFF00897B),
-              onTap: () => _open(context, 'LSE', AlgDatabase.rouxLSE),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _open(BuildContext context, String title, List<dynamic> algorithms) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => TrainingScreen(title: title, algorithms: algorithms),
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  final String title;
-  const _Header({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, top: 4, bottom: 4),
-      child: Text(
-        title,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: theme.colorScheme.onSurfaceVariant,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String description;
-  final int count;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.description,
-    required this.count,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(18),
-      elevation: 1,
-      shadowColor: color.withOpacity(0.3),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.tr('app_title'),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: white)),
+                const SizedBox(height: 4),
+                Text(
+                  t.tr('hero_subtitle').replaceAll('{cases}', '$kTotalCases').replaceAll('{algs}', '$kTotalAlgs'),
+                  style: TextStyle(color: white.withValues(alpha: 0.85), fontSize: 13, height: 1.3),
                 ),
-                child: Icon(icon, color: color, size: 30),
-              ),
-              const SizedBox(width: 14),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Text('${(progress * 100).round()}%',
+                      style: const TextStyle(color: white, fontSize: 30, fontWeight: FontWeight.w900, height: 1)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      t.tr('learned_of').replaceAll('{n}', '$learned').replaceAll('{total}', '$kTotalCases'),
+                      style: TextStyle(color: white.withValues(alpha: 0.9), fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(children: [
+                    Container(height: 8, color: white.withValues(alpha: 0.22)),
+                    FractionallySizedBox(
+                      widthFactor: (learned + learning) / (kTotalCases == 0 ? 1 : kTotalCases),
+                      child: Container(height: 8, color: white.withValues(alpha: 0.45)),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: progress,
+                      child: Container(height: 8, color: white),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  t.tr('learning_now').replaceAll('{n}', '$learning'),
+                  style: TextStyle(color: white.withValues(alpha: 0.8), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          const SpinningCube(size: 118),
+        ],
+      ),
+    );
+  }
+}
+
+class _SetTile extends StatelessWidget {
+  final AlgSet set;
+  const _SetTile({required this.set});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final t = AppLocalizations.of(context);
+    final th = Theme.of(context);
+    final color = AppTheme.colorForSet(set.id);
+    final learned = state.countStatus(set, LearnStatus.learned);
+    final learning = state.countStatus(set, LearnStatus.learning);
+    final total = set.cases.length;
+    final algs = set.cases.fold<int>(0, (a, c) => a + c.algs.length);
+
+    return TintCard(
+      color: color,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SetScreen(set: set))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '$count',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    Text(set.title, style: th.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.3,
-                      ),
+                      t.tr('set_${set.id}'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: th.textTheme.bodySmall?.copyWith(color: th.colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: theme.colorScheme.onSurfaceVariant,
+              ProgressRing(
+                value: total == 0 ? 0 : learned / total,
+                color: color,
+                size: 46,
+                stroke: 5,
+                child: Text('${total == 0 ? 0 : (learned * 100 / total).round()}%',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: color)),
               ),
             ],
           ),
-        ),
+          const Spacer(),
+          Row(
+            children: [
+              SizedBox(
+                width: 42,
+                height: 42,
+                child: CasePreview(algCase: set.cases.first, size: 42, grayscale: state.grayscale),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.tr('n_cases_algs').replaceAll('{c}', '$total').replaceAll('{a}', '$algs'),
+                      style: th.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Stack(children: [
+                        Container(height: 5, color: color.withValues(alpha: 0.16)),
+                        FractionallySizedBox(
+                          widthFactor: total == 0 ? 0 : (learned + learning) / total,
+                          child: Container(height: 5, color: AppTheme.statusLearning.withValues(alpha: 0.8)),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: total == 0 ? 0 : learned / total,
+                          child: Container(height: 5, color: color),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -1,470 +1,524 @@
-import 'dart:async';
-import 'dart:math';
-import 'package:flutter/material.dart';
-import '../data/alg_database.dart';
-import '../services/favorite_service.dart';
-import '../services/trainer_service.dart';
-import '../models/rubiks_cube.dart';
-import '../widgets/cube_preview_3d.dart';
-import '../widgets/cube_top_view.dart';
-import '../l10n/app_localizations.dart';
+import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../data/alg_data.dart';
+import '../l10n/app_localizations.dart';
+import '../logic/scramble.dart';
+import '../logic/speed_timer.dart';
+import '../logic/stats.dart';
+import '../models/alg_models.dart';
+import '../services/app_state.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common.dart';
+import 'case_screen.dart';
+
+/// Case trainer: random scramble for a case from the selected sets,
+/// weighted towards cases that are slow or still being learned.
 class TrainerScreen extends StatefulWidget {
-  const TrainerScreen({Key? key}) : super(key: key);
+  final Set<String>? initialSets;
+  final bool standalone;
+  final bool active;
+  const TrainerScreen({super.key, this.initialSets, this.standalone = false, this.active = true});
 
   @override
   State<TrainerScreen> createState() => _TrainerScreenState();
 }
 
 class _TrainerScreenState extends State<TrainerScreen> {
-  final _favService = FavoriteService();
-  final _trainerService = TrainerService();
-  final _rand = Random();
+  final _rnd = math.Random();
+  final _focus = FocusNode(debugLabel: 'trainer');
+  late Set<String> _sets;
+  Set<LearnStatus> _statuses = LearnStatus.values.toSet();
+  bool _favOnly = false;
 
-  List<dynamic> _all = [];
-  List<dynamic> _pool = [];
-  dynamic _current;
-  List<int> _times = [];
+  AlgCase? _current;
+  String _scramble = '';
+  bool _hint = false;
 
-  bool _loading = true;
-  bool _useFavorites = true;
-  bool _showAlg = false;
+  AlgCase? _lastCase;
+  int? _lastMs;
+  bool _reveal = false;
 
-  Timer? _timer;
-  DateTime? _startTime;
-  int _elapsedMs = 0;
-  bool _running = false;
+  final Map<String, int> _seen = {};
+  int _round = 0;
+  SpeedTimer? _timer;
 
-  RubiksCube? _cube;
-  List<List<int>>? _arrows;
+  static const _statusWeight = {
+    LearnStatus.notLearned: 1.0,
+    LearnStatus.learning: 3.0,
+    LearnStatus.learned: 0.6,
+  };
 
   @override
   void initState() {
     super.initState();
-    _init();
+    _sets = {...(widget.initialSets ?? {'oll', 'pll'})};
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = AppScope.of(context);
+    if (_timer == null) {
+      _timer = SpeedTimer(holdMs: state.holdMs, useInspection: false, onSolved: _onSolved)
+        ..addListener(_onTimer);
+      _next();
+    } else {
+      _timer!.holdMs = state.holdMs;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant TrainerScreen old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      _focus.requestFocus();
+    } else if (!widget.active && old.active) {
+      _timer?.cancel();
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _timer?.removeListener(_onTimer);
+    _timer?.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  Future<void> _init() async {
-    _all = [
-      ...AlgDatabase.f2l,
-      ...AlgDatabase.oll,
-      ...AlgDatabase.pll,
-      ...AlgDatabase.rouxCMLL,
-      ...AlgDatabase.rouxLSE,
-    ];
-    await _rebuildPool();
-    setState(() => _loading = false);
+  void _onTimer() {
+    if (mounted) setState(() {});
   }
 
-  Future<void> _rebuildPool() async {
-    final favs = await _favService.loadAll();
-    if (_useFavorites && favs.isNotEmpty) {
-      _pool = _all.where((a) => favs.contains(a.name as String)).toList();
-    } else {
-      _pool = List.from(_all);
-    }
-    _pool.shuffle(_rand);
-    await _pickNext();
-  }
+  List<AlgCase> _pool(AppState state) => [
+        for (final s in kAlgSets)
+          if (_sets.contains(s.id))
+            for (final c in s.cases)
+              if (_statuses.contains(state.status(c.id)) && (!_favOnly || state.isFavorite(c.id))) c,
+      ];
 
-  Future<void> _pickNext() async {
-    _stop();
-    if (_pool.isEmpty) {
-      setState(() {
-        _current = null;
-        _cube = null;
-        _arrows = null;
-        _times = [];
-        _elapsedMs = 0;
-      });
+  void _next() {
+    final state = AppScope.read(context);
+    final pool = _pool(state);
+    if (pool.isEmpty) {
+      _current = null;
+      _scramble = '';
       return;
     }
-    final next = _pool.removeLast();
-    final times = await _trainerService.getTimes(next.name as String);
-
-    final c = RubiksCube();
-    c.applyScramble(next.scramble as String);
-
-    setState(() {
-      _current = next;
-      _times = times;
-      _elapsedMs = 0;
-      _showAlg = false;
-      _cube = c;
-      _arrows = (next.name as String).startsWith('PLL')
-          ? c.computePllArrows()
-          : null;
-    });
-  }
-
-  void _start() {
-    _startTime = DateTime.now();
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 30), (_) {
-      if (_startTime == null) return;
-      setState(() {
-        _elapsedMs = DateTime.now().difference(_startTime!).inMilliseconds;
-      });
-    });
-    setState(() => _running = true);
-  }
-
-  void _stop() {
-    _timer?.cancel();
-    _timer = null;
-    setState(() => _running = false);
-  }
-
-  Future<void> _save() async {
-    if (_current == null || _elapsedMs <= 0) return;
-    await _trainerService.addTime(_current.name as String, _elapsedMs);
-    final times = await _trainerService.getTimes(_current.name as String);
-    setState(() => _times = times);
-  }
-
-  String _fmt(int ms) {
-    if (ms == 0) return '0.00';
-    if (ms < 60000) return (ms / 1000).toStringAsFixed(2);
-    final m = ms ~/ 60000;
-    final s = ((ms % 60000) / 1000).toStringAsFixed(2).padLeft(5, '0');
-    return '$m:$s';
-  }
-
-  int? get _best => _times.isEmpty ? null : _times.reduce(min);
-
-  int? get _avg5 {
-    if (_times.isEmpty) return null;
-    final n = min(5, _times.length);
-    final last = _times.sublist(_times.length - n);
-    return last.reduce((a, b) => a + b) ~/ n;
-  }
-
-  int? get _avg12 {
-    if (_times.isEmpty) return null;
-    final n = min(12, _times.length);
-    final last = _times.sublist(_times.length - n);
-    return last.reduce((a, b) => a + b) ~/ n;
-  }
-
-  Widget _buildPreview() {
-    if (_cube == null || _current == null) return const SizedBox.shrink();
-    if ((_current.name as String).startsWith('F2L')) {
-      return CubePreview3D(cube: _cube!, size: 130);
+    final avgs = {for (final c in pool) c.id: state.avgTime(c.id)};
+    final known = avgs.values.whereType<double>().toList();
+    final global = known.isEmpty ? null : known.reduce((a, b) => a + b) / known.length;
+    final weights = <double>[];
+    for (final c in pool) {
+      if (pool.length > 1 && c.id == _current?.id) {
+        weights.add(0);
+        continue;
+      }
+      final avg = avgs[c.id];
+      final speed = (avg == null || global == null || global == 0) ? 1.5 : (avg / global).clamp(0.5, 3.0);
+      final since = math.min(_round - (_seen[c.id] ?? -20), 20);
+      weights.add(_statusWeight[state.status(c.id)]! * speed * (1 + 0.15 * since));
     }
-    return CubeTopView(cube: _cube!, size: 130, arrows: _arrows);
+    final total = weights.fold<double>(0, (a, b) => a + b);
+    var r = _rnd.nextDouble() * total;
+    var pick = pool.last;
+    for (var i = 0; i < pool.length; i++) {
+      r -= weights[i];
+      if (r <= 0 && weights[i] > 0) {
+        pick = pool[i];
+        break;
+      }
+    }
+    _current = pick;
+    _hint = false;
+    _scramble = Scrambler.forCase(pick.scrambles, pick.scrambleFrom, pick.algs.indexOf(state.mainAlg(pick)));
+  }
+
+  void _onSolved(int ms, Penalty p) {
+    final c = _current;
+    if (c == null) return;
+    AppScope.read(context).addTime(c.id, ms);
+    _seen[c.id] = _round;
+    _round++;
+    setState(() {
+      _lastCase = c;
+      _lastMs = ms;
+      _reveal = false;
+      _next();
+    });
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    if (!widget.active || e.logicalKey != LogicalKeyboardKey.space || _current == null) {
+      return KeyEventResult.ignored;
+    }
+    if (e is KeyDownEvent) _timer!.down();
+    if (e is KeyUpEvent) _timer!.up();
+    return KeyEventResult.handled;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    final state = AppScope.of(context);
     final t = AppLocalizations.of(context);
-    final theme = Theme.of(context);
+    final th = Theme.of(context);
+    final timer = _timer!;
+    final focusMode = timer.phase == TimerPhase.running || timer.phase == TimerPhase.ready;
+    final pool = _pool(state);
+
+    final Color timeColor = switch (timer.phase) {
+      TimerPhase.holding => AppTheme.statusLearning,
+      TimerPhase.ready => AppTheme.statusLearned,
+      _ => th.colorScheme.onSurface,
+    };
+    final timeText = switch (timer.phase) {
+      TimerPhase.running => Stats.format(timer.elapsedMs),
+      TimerPhase.holding || TimerPhase.ready => Stats.format(0),
+      _ => _lastMs == null ? Stats.format(0) : Stats.format(_lastMs),
+    };
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.trainer),
+        title: Text(t.tr('trainer')),
+        automaticallyImplyLeading: widget.standalone,
         actions: [
           IconButton(
-            icon: Icon(_useFavorites ? Icons.favorite : Icons.favorite_border),
-            tooltip: _useFavorites ? t.trainerFavs : t.trainerAll,
-            onPressed: () async {
-              setState(() => _useFavorites = !_useFavorites);
-              await _rebuildPool();
-            },
+            tooltip: t.tr('slowest_cases'),
+            onPressed: () => _showSlowest(context, pool),
+            icon: const Icon(Icons.trending_down_rounded),
+          ),
+          IconButton(
+            tooltip: t.tr('trainer_setup'),
+            onPressed: () => _showSetup(context),
+            icon: const Icon(Icons.tune_rounded),
           ),
         ],
       ),
-      body: _current == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text(
-                  t.trainerNoFavs,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontSize: 14,
+      body: Focus(
+        focusNode: _focus,
+        autofocus: widget.active,
+        onKeyEvent: _onKey,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: focusMode ? 0 : 1,
+                child: Column(children: [
+                  SizedBox(
+                    height: 44,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        for (final s in kAlgSets.where((s) => _sets.contains(s.id)))
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
+                            child: CountPill(color: AppTheme.colorForSet(s.id), text: s.title),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: CountPill(
+                            color: th.colorScheme.onSurfaceVariant,
+                            icon: Icons.layers_rounded,
+                            text: '${pool.length} ${t.tr('cases')}',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 14, 8, 14),
+                        child: _current == null
+                            ? Row(children: [
+                                Expanded(child: Text(t.tr('trainer_empty'))),
+                                TextButton(onPressed: () => _showSetup(context), child: Text(t.tr('trainer_setup'))),
+                              ])
+                            : Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(t.tr('scramble').toUpperCase(),
+                                            style: th.textTheme.labelSmall?.copyWith(
+                                                letterSpacing: 1.2, color: th.colorScheme.onSurfaceVariant)),
+                                        const SizedBox(height: 6),
+                                        Text(_scramble, style: AppTheme.mono.copyWith(fontSize: 19, height: 1.35)),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () => setState(() => _hint = !_hint),
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 250),
+                                      child: _hint
+                                          ? CasePreview(
+                                              key: ValueKey(_current!.id),
+                                              algCase: _current!,
+                                              size: 72,
+                                              grayscale: state.grayscale,
+                                            )
+                                          : Container(
+                                              key: const ValueKey('hidden'),
+                                              width: 72,
+                                              height: 72,
+                                              decoration: BoxDecoration(
+                                                color: th.colorScheme.surfaceContainerHighest,
+                                                borderRadius: BorderRadius.circular(16),
+                                              ),
+                                              child: Icon(Icons.visibility_rounded,
+                                                  color: th.colorScheme.onSurfaceVariant),
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+              Expanded(
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: (_) {
+                    if (_current != null) timer.down();
+                  },
+                  onPointerUp: (_) {
+                    if (_current != null) timer.up();
+                  },
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 120),
+                          style: TextStyle(
+                            fontSize: 76,
+                            fontWeight: FontWeight.w800,
+                            color: timeColor,
+                            letterSpacing: -2,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                          child: Text(timeText),
+                        ),
+                        const SizedBox(height: 6),
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 200),
+                          opacity: timer.phase == TimerPhase.running ? 0 : 1,
+                          child: Text(
+                            t.tr(timer.phase == TimerPhase.ready ? 'release_to_start' : 'hold_to_start'),
+                            style: th.textTheme.bodyMedium?.copyWith(color: th.colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _current.name as String,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
-                          ),
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: focusMode ? 0 : 1,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: _lastCase == null
+                      ? const SizedBox(height: 8)
+                      : _LastResult(
+                          key: ValueKey('$_round'),
+                          algCase: _lastCase!,
+                          ms: _lastMs ?? 0,
+                          reveal: _reveal,
+                          onReveal: () => setState(() => _reveal = !_reveal),
                         ),
-                        const SizedBox(height: 12),
-                        _buildPreview(),
-                        const SizedBox(height: 12),
-                        Text(
-                          t.trainerScramble,
-                          style: theme.textTheme.labelSmall,
-                        ),
-                        const SizedBox(height: 4),
-                        SelectableText(
-                          _current.scramble as String,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    _fmt(_elapsedMs),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 64,
-                      fontWeight: FontWeight.bold,
-                      color: _running
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 100,
-                    child: _running
-                        ? ElevatedButton.icon(
-                            onPressed: _stop,
-                            icon: const Icon(Icons.stop_rounded, size: 40),
-                            label: Text(
-                              t.trainerStop,
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                          )
-                        : ElevatedButton.icon(
-                            onPressed: _start,
-                            icon: const Icon(Icons.play_arrow_rounded, size: 40),
-                            label: Text(
-                              t.trainerStart,
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                          ),
-                  ),
-                  if (!_running && _elapsedMs > 0) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 54,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                await _save();
-                                await _pickNext();
-                              },
-                              icon: const Icon(Icons.check),
-                              label: Text(
-                                t.trainerNext,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          height: 54,
-                          child: OutlinedButton(
-                            onPressed: () => setState(() => _elapsedMs = 0),
-                            child: Text(
-                              t.trainerReset,
-                              style: const TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  _statsRow(theme, t),
-                  const SizedBox(height: 16),
-                  if (_times.isNotEmpty) _recentTimes(theme, t),
-                  const SizedBox(height: 16),
-                  _algBox(theme, t),
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _statsRow(ThemeData theme, AppLocalizations t) {
-    Widget item(String label, String? value) {
-      return Expanded(
-        child: Column(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+  void _showSlowest(BuildContext context, List<AlgCase> pool) {
+    final state = AppScope.read(context);
+    final t = AppLocalizations.of(context);
+    final timed = pool.where((c) => state.avgTime(c.id) != null).toList()
+      ..sort((a, b) => state.avgTime(b.id)!.compareTo(state.avgTime(a.id)!));
+    final top = timed.take(5).toList();
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t.tr('slowest_cases'), style: Theme.of(ctx).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(t.tr('slowest_desc'), style: Theme.of(ctx).textTheme.bodySmall),
+              const SizedBox(height: 8),
+              if (top.isEmpty)
+                Padding(padding: const EdgeInsets.all(16), child: Text(t.tr('no_times_yet')))
+              else
+                for (final c in top)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CasePreview(algCase: c, size: 48, grayscale: state.grayscale),
+                    title: Text(c.title),
+                    subtitle: Text(state.mainAlg(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTheme.mono),
+                    trailing: Text(Stats.format(state.avgTime(c.id)!.round()),
+                        style: const TextStyle(fontWeight: FontWeight.w800)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => CaseScreen(algCase: c)));
+                    },
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSetup(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          void upd(VoidCallback f) {
+            setS(f);
+            setState(() {});
+          }
+
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.75,
+            maxChildSize: 0.95,
+            builder: (ctx, scroll) => ListView(
+              controller: scroll,
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              children: [
+                Text(t.tr('trainer_setup'), style: Theme.of(ctx).textTheme.titleLarge),
+                for (final m in Method.values) ...[
+                  const SizedBox(height: 16),
+                  Text(methodName(t, m), style: Theme.of(ctx).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final s in AlgRepo.byMethod(m))
+                      FilterChip(
+                        label: Text('${s.title} · ${s.cases.length}'),
+                        selected: _sets.contains(s.id),
+                        selectedColor: AppTheme.colorForSet(s.id).withValues(alpha: 0.25),
+                        onSelected: (v) => upd(() => v ? _sets.add(s.id) : _sets.remove(s.id)),
+                      ),
+                  ]),
+                ],
+                const SizedBox(height: 20),
+                Text(t.tr('status'), style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final s in LearnStatus.values)
+                    FilterChip(
+                      avatar: Icon(statusIcon(s), size: 16, color: statusColor(s)),
+                      label: Text(statusLabel(t, s)),
+                      selected: _statuses.contains(s),
+                      onSelected: (v) => upd(() {
+                        final n = {..._statuses};
+                        v ? n.add(s) : n.remove(s);
+                        if (n.isNotEmpty) _statuses = n;
+                      }),
+                    ),
+                ]),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(t.tr('favorites_only')),
+                  value: _favOnly,
+                  onChanged: (v) => upd(() => _favOnly = v),
+                ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              value ?? '—',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'monospace',
+          );
+        },
+      ),
+    );
+    if (mounted) setState(_next);
+  }
+}
+
+class _LastResult extends StatelessWidget {
+  final AlgCase algCase;
+  final int ms;
+  final bool reveal;
+  final VoidCallback onReveal;
+  const _LastResult({super.key, required this.algCase, required this.ms, required this.reveal, required this.onReveal});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final t = AppLocalizations.of(context);
+    final th = Theme.of(context);
+    final c = algCase;
+    final times = state.times(c.id);
+    final best = times.isEmpty ? null : times.reduce(math.min);
+    final color = AppTheme.colorForSet(AlgRepo.setOfCase[c.id]!.id);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: TintCard(
+        color: color,
+        padding: const EdgeInsets.all(12),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CaseScreen(algCase: c))),
+        child: Row(
+          children: [
+            CasePreview(algCase: c, size: 64, grayscale: state.grayscale),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text('${t.tr('last_case')}: ${c.title}',
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: th.textTheme.titleSmall),
+                    ),
+                    Text(Stats.format(ms), style: th.textTheme.titleMedium?.copyWith(color: color)),
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${t.tr('best')} ${Stats.format(best)} · ${t.tr('average')} ${Stats.format(state.avgTime(c.id)?.round())}',
+                    style: th.textTheme.labelSmall?.copyWith(color: th.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: onReveal,
+                    child: AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 200),
+                      crossFadeState: reveal ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                      firstChild: Text(t.tr('show_alg'),
+                          style: th.textTheme.labelLarge?.copyWith(color: th.colorScheme.primary)),
+                      secondChild: Text(state.mainAlg(c), style: AppTheme.mono.copyWith(fontSize: 13)),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        children: [
-          item(t.trainerBest, _best != null ? _fmt(_best!) : null),
-          item(t.trainerAvg5, _avg5 != null ? _fmt(_avg5!) : null),
-          item(t.trainerAvg12, _avg12 != null ? _fmt(_avg12!) : null),
-        ],
-      ),
-    );
-  }
-
-  Widget _recentTimes(ThemeData theme, AppLocalizations t) {
-    final last = _times.length > 10
-        ? _times.sublist(_times.length - 10)
-        : _times;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          t.trainerRecent,
-          style: theme.textTheme.labelSmall,
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: last.map((ms) {
-            final isBest = _best != null && ms == _best;
-            return Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isBest
-                    ? theme.colorScheme.primary.withOpacity(0.2)
-                    : theme.colorScheme.surfaceContainerHighest
-                        .withOpacity(0.4),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _fmt(ms),
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  fontWeight: isBest ? FontWeight.bold : FontWeight.normal,
-                  color: isBest ? theme.colorScheme.primary : null,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _algBox(ThemeData theme, AppLocalizations t) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextButton.icon(
-          onPressed: () => setState(() => _showAlg = !_showAlg),
-          icon: Icon(
-            _showAlg ? Icons.visibility_off : Icons.visibility,
-            size: 18,
-          ),
-          label: Text(_showAlg ? t.trainerHideAlg : t.trainerShowAlg),
-        ),
-        if (_showAlg) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest
-                  .withOpacity(0.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: SelectableText(
-              _current.alg as String,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: () async {
-              await _trainerService.clearTimes(_current.name as String);
-              setState(() => _times = []);
-            },
-            icon: const Icon(Icons.delete_outline, size: 16),
-            label: Text(t.trainerClear),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-          ),
-        ],
-      ],
     );
   }
 }

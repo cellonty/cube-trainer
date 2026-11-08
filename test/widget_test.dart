@@ -1,30 +1,44 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:cfop_trainer/data/alg_data.dart';
+import 'package:cfop_trainer/logic/alg_tools.dart';
 import 'package:cfop_trainer/main.dart';
+import 'package:cfop_trainer/services/app_state.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('every algorithm solves its case', () {
+    var count = 0;
+    for (final set in kAlgSets) {
+      for (final c in set.cases) {
+        for (final alg in c.algs) {
+          expect(CubeChecks.solves(c.setup, alg, c.goal), isTrue, reason: '${c.id}: $alg');
+          count++;
+        }
+      }
+    }
+    expect(count, kTotalAlgs);
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('every practice scramble is solved by its source algorithm', () {
+    for (final set in kAlgSets) {
+      for (final c in set.cases) {
+        for (var i = 0; i < c.scrambles.length; i++) {
+          // -1 means the scramble is the case setup itself, so the main alg solves it.
+          final from = c.scrambleFrom[i];
+          final alg = c.algs[from < 0 ? 0 : from];
+          expect(CubeChecks.solves(c.scrambles[i], alg, c.goal), isTrue, reason: '${c.id}: ${c.scrambles[i]}');
+        }
+      }
+    }
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('app starts', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = await AppState.create();
+    await tester.pumpWidget(CubeTrainerApp(state: state));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(NavigationBar), findsOneWidget);
   });
 }
