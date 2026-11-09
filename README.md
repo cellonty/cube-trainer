@@ -4,8 +4,6 @@ A Flutter app for learning and drilling Rubik's Cube algorithms on 3×3 and 2×2
 
 **390 cases · 1511 algorithms · 9 languages · works offline**
 
-🇷🇺 [Читать на русском](README_RU.md)
-
 ---
 
 ## ✨ Features
